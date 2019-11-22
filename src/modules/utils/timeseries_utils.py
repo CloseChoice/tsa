@@ -59,9 +59,14 @@ def add_ts_with_different_dates(ts1, ts2):
 def build_ts_id_with_firsts_units(dist, start_date, end_date, unit):
     """construct a new time series with entries at the first of the given unit, e.g. first of the month"""
 
-    def calculate_units_in_time_range():
+    #def calculate_units_in_time_range():
 
-    time_idx = [start_date]
+    #time_idx = [start_date]
 
+
+def build_ts_from_gaussian_ts(periods, variances):
+    """build dense time series where points are distributed over a period as a gaussian curve. This should
+    be extended in the future, so that arbitrary distributions can be sampled but this shall be enough as of
+    November 2019."""
 
 #def build_features_for_time_series(ts, seasonalities)
