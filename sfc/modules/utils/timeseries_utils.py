@@ -1,12 +1,14 @@
 import pandas as pd
 import numpy as np
 from functools import reduce
+from typing import List
+from sfc.modules.utils.Enums import Interval
 
 
 def sample_from_scipy_distribution(dist, size, **kwargs):
     """ use a given distribution to and extract size samples from it."""
     if kwargs:
-       return dist.rvs(**kwargs, size=size)
+        return dist.rvs(**kwargs, size=size)
     return dist.rvs(size=size)
 
 
@@ -31,7 +33,7 @@ def build_sparse_ts_from_distributions(start_date, end_date, seasonalities, time
     ts_list = []
     for (name, dist), seasonality in zip(dist_dict.items(), seasonalities):
         ts_list.append(build_sparse_ts_by_seasonality(dist, start_date, end_date, seasonality, time_interval,
-                                            **kwargs.get(name, {})))
+                                                      **kwargs.get(name, {})))
     ts = reduce(lambda x, y: add_ts_with_different_dates(x, y), ts_list)  # add time series together
     return ts
 
@@ -59,15 +61,17 @@ def add_ts_with_different_dates(ts1, ts2):
 def build_ts_id_with_firsts_units(dist, start_date, end_date, unit):
     """construct a new time series with entries at the first of the given unit, e.g. first of the month"""
 
-    #def calculate_units_in_time_range():
+#   def calculate_units_in_time_range():
 
-    #time_idx = [start_date]
+#   time_idx = [start_date]
 
 
 def build_ts_from_gaussian_ts(periods, variances):
     """build dense time series where points are distributed over a period as a gaussian curve. This should
     be extended in the future, so that arbitrary distributions can be sampled but this shall be enough as of
     November 2019."""
+
+# Use following generating functions
 
 def ts_gaussian_seasonality(x, seasonality, noise=0.01, spread_factor=0.001):
     """ time series with a gaussian seasonality, which means that each seaonsality time window represents a gaussian
@@ -79,16 +83,26 @@ def ts_gaussian_seasonality(x, seasonality, noise=0.01, spread_factor=0.001):
 
     x = (x - np.min(x)) % seasonality
     x_spread = np.max(x) - np.min(x)
-    return (l := 1 / (spread_factor * x_spread * np.sqrt(np.pi * 2)) * np.exp(
+    l = 1 / (spread_factor * x_spread * np.sqrt(np.pi * 2))
+    return (l * np.exp(
         -(x - x[int(x_spread / 2)]) ** 2 / (spread_factor * x_spread))) + noise * l * np.random.rand(len(x))
 
 
-def create_ts_from_dist(start_dt, end_dt, time_interval, seasonality, dist=ts_gaussian_seasonality):
-    """sample a time series with seasonality from the function func. All native pandas timedeltas are supported."""
-    x = pd.date_range(start_dt, end_dt, freq=f'1{time_interval.lower()}')
-    x_ints = x.astype(np.int32) / (pd.Timedelta(f'1{time_interval.lower()}') / pd.Timedelta('1nanosecond'))
+def create_ts_from_dist(start_dt: str, end_dt: str, time_interval: Interval, seasonality: int,
+                        dist=ts_gaussian_seasonality) -> (np.array, np.array):
+    """ sample a time series with seasonality from the function func. All native pandas timedeltas are supported."""
+    x = pd.date_range(start_dt, end_dt, freq=f'1{time_interval.value}')
+    x_ints = x.astype(np.int32) / (pd.Timedelta(f'1{time_interval.value}') / pd.Timedelta('1nanosecond'))
     y = dist(x_ints, seasonality)
-    return x, y
+    return pd.Series(y, index=x)
 
-#def build_features_for_time_series(ts, seasonalities)
 
+def agg_ts_from_dists(start_dt: str, end_dt: str, seasonalities: List[int], time_interval: Interval,
+                      dist_list=None):
+    """constructs a time series with given distributions and seasonalities in a given frequency time_interval"""
+    ts_list = []
+    dist_list = dist_list or [ts_gaussian_seasonality] * len(seasonalities)
+    for dist, seasonality in zip(dist_list, seasonalities):
+        ts_list.append(create_ts_from_dist(start_dt, end_dt, time_interval, seasonality, dist))
+    ts = reduce(lambda x, y: add_ts_with_different_dates(x, y), ts_list)  # add time series together
+    return ts
