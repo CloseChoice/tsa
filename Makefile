@@ -72,6 +72,7 @@ else
 	@echo ">>> New virtualenv created. Activate with:\nworkon $(PROJECT_NAME)"
 endif
 
+
 ## Test python environment is setup correctly
 test_environment:
 	$(PYTHON_INTERPRETER) test_environment.py
@@ -80,6 +81,8 @@ test_environment:
 # PROJECT RULES                                                                 #
 #################################################################################
 
+test:
+	@echo "no tests executed"
 
 
 #################################################################################
