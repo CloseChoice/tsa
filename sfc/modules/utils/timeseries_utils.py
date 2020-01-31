@@ -137,3 +137,35 @@ def peaks_by_rules(date_index: pd.DatetimeIndex, ts_value: Union[int, float], co
         raise NotImplementedError(f'your rule is not implemented. Value:{rule_value}, rule: {rule}')
     df = pd.DataFrame(values, columns=[col_name], index=date_index)
     return df
+
+
+def split_categorical_time_series_labels(features: pd.DataFrame, labels: pd.Series, time_stamps: int,
+                                         train_size: float):
+    """Stratified split of time series with categorical labels."""
+    def assertions():
+        assert len(features) == len(labels)
+        assert (features.index == np.arange(
+            len(features))).all(), "Index must start at 0 and range up to len(df_features)-1"
+        assert (labels.index == np.arange(len(labels))).all(), "Index must start at 0 and range up to len(labels)-1"
+        assert 0 <= train_size <= 1, f"train size must be between 0 and 1 but is given as {train_size}"
+
+    assertions()
+
+    labels_train, labels_test = pd.Series(), pd.Series()
+    features_train, features_test = pd.DataFrame(), pd.DataFrame()
+    indices = [list(labels.loc[labels == i].index) for i in sorted(labels.unique())]
+    for idxs in indices:
+        features_label = reshape_array_to_tensor(features.loc[idxs], time_stamps)
+        features_label = features_label.dropna()
+        y_label = labels.loc[features_label.index]
+        split_ind = int(len(y_label) * train_size)
+
+        features_train = features_train.append(features_label.iloc[:split_ind])
+        features_test = features_test.append(features_label.iloc[split_ind:])
+        labels_train = labels_train.append(y_label.iloc[:split_ind])
+        labels_test = labels_test.append(y_label.iloc[split_ind:])
+    return features_train, features_test, labels_train, labels_test
+
+
+def reshape_array_to_tensor(data: pd.DataFrame, time_steps: int):
+    return pd.concat([data.shift(-i) for i in range(time_steps)], 1)
