@@ -1,9 +1,10 @@
-import pandas as pd
-import numpy as np
+"""timeseries_utils provides general functionality for generating and processing time series"""
 from functools import reduce
 from typing import List, Union
+import pandas as pd
+import numpy as np
 
-from sfc.modules.utils.Enums import Interval
+from sfc.modules.utils.enums import Interval
 
 
 def sample_from_scipy_distribution(dist, size, **kwargs):
@@ -52,25 +53,12 @@ def build_dense_ts_by_distribution(start_date, end_date, seasonality, freq):
 
 
 def add_ts_with_different_dates(ts1, ts2):
+    """add two timeseries with different dates together, e.g. ts1 has daily indices, ts2 has monthly"""
     if len(ts1) > len(ts2):
         ts = ts1.add(ts2).combine_first(ts1)
     else:
         ts = ts2.add(ts1).combine_first(ts2)
     return ts
-
-
-def build_ts_id_with_firsts_units(dist, start_date, end_date, unit):
-    """construct a new time series with entries at the first of the given unit, e.g. first of the month"""
-
-#   def calculate_units_in_time_range():
-
-#   time_idx = [start_date]
-
-
-def build_ts_from_gaussian_ts(periods, variances):
-    """build dense time series where points are distributed over a period as a gaussian curve. This should
-    be extended in the future, so that arbitrary distributions can be sampled but this shall be enough as of
-    November 2019."""
 
 # USE FOLLOWING GENERATING FUNCTIONS
 
@@ -127,7 +115,8 @@ def peaks_by_rules(date_index: pd.DatetimeIndex, ts_value: Union[int, float], co
         return time_stamp == (time_stamp - pd.offsets.Day(1) + pd.offsets.MonthEnd()) - pd.offsets.Day(rule_value)
 
     if rule == 'last_n_day_of_month':
-        assert 0 <= rule_value <= 31, f"rule_value out of range. Allowed values are between 0 and 31 but {rule_value} was given"
+        assert 0 <= rule_value <= 31, f"rule_value out of range. Allowed values are between 0 and 31 but" \
+                                      f" {rule_value} was given"
         values = np.where(pd.Series(date_index).apply(lambda x: last_n_day_of_month(x)), ts_value, 0)
     elif hasattr(date_index, rule):
         values = np.where(getattr(date_index, rule) == rule_value, ts_value, 0)
@@ -137,3 +126,41 @@ def peaks_by_rules(date_index: pd.DatetimeIndex, ts_value: Union[int, float], co
         raise NotImplementedError(f'your rule is not implemented. Value:{rule_value}, rule: {rule}')
     df = pd.DataFrame(values, columns=[col_name], index=date_index)
     return df
+
+
+def split_categorical_time_series_labels(features: pd.DataFrame, labels: pd.Series, time_stamps: int,
+                                         train_size: float):
+    """Stratified split of time series with categorical labels."""
+    def assertions():
+        assert len(features) == len(labels)
+        assert (features.index == np.arange(
+            len(features))).all(), "Index must start at 0 and range up to len(df_features)-1"
+        assert (labels.index == np.arange(len(labels))).all(), "Index must start at 0 and range up to len(labels)-1"
+        assert 0 <= train_size <= 1, f"train size must be between 0 and 1 but is given as {train_size}"
+        assert features.isnull().any(1).sum() == 0, "Null detected in features. Please impute before splitting"
+        assert labels.isnull().all().sum() == 0, "Null detected in labels. Pleas impute before splitting"
+
+    assertions()
+
+    labels_train, labels_test = pd.Series(), pd.Series()
+    features_train, features_test = pd.DataFrame(), pd.DataFrame()
+    indices = [list(labels.loc[labels == i].index) for i in sorted(labels.unique())]
+    for idxs in indices:
+        features_label = reshape_array_to_tensor(features.loc[idxs], time_stamps)
+        features_label = features_label.dropna()
+        y_label = labels.loc[features_label.index]
+        split_ind = int(len(y_label) * train_size)
+
+        features_train = features_train.append(features_label.iloc[:split_ind])
+        features_test = features_test.append(features_label.iloc[split_ind:])
+        labels_train = labels_train.append(y_label.iloc[:split_ind])
+        labels_test = labels_test.append(y_label.iloc[split_ind:])
+    return features_train, features_test, labels_train, labels_test
+
+
+def reshape_array_to_tensor(data: pd.DataFrame, time_steps: int):
+    """reshape an array to tensor form. Shifts the dataframe for each element in 1-time_steps and appends the shifted
+    dataframe on the right.
+    :param data: given dataframe to reshape
+    :param time_steps: time steps for which the data frame is shifted."""
+    return pd.concat([data.shift(-i) for i in range(time_steps)], 1)
